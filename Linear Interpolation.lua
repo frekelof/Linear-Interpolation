@@ -1,5 +1,7 @@
 -- Changelog --
--- 2019-10-09: First version considered done
+-- 2019-10-09: First version considered done.
+-- 2019-10-10: Added, clear all values when Esc key is pressed two times. 
+--             Changed button icons due to graphical glitch on hand held unit.
 
 -- Minimum requirements: TI Nspire CX CAS (color resulution 318x212)
 -- https://en.wikipedia.org/wiki/Linear_interpolation
@@ -10,7 +12,7 @@
 -- Code does not check for device compability other then trough apilevel requirement. CAS is required for solving equation.
 
 platform.apilevel = '2.4'
-appversion = "191009" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
+appversion = "191010" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
 
 -- Grid layout configuration
 lblhdg = "Linear Interpolation" -- Heading text
@@ -25,7 +27,7 @@ fnthdg = 12 -- Heading font size
 fntbody = 10 -- Label and body text font size 
 
 -- Colors
-bgcolor = 0xCFE2F3 -- Background, Mizu blue
+bgcolor = 0xCFE2F3 -- Background, Light blue
 errorcolor = 0xF02600 -- Error text, Dark Red
 
 -- Variabels for internal use
@@ -33,6 +35,8 @@ setfocus = 1 -- Sets focus in box A when program launches
 inpidtable = {} -- Initial empty table for storing input boxes unique ID:s
 inpexptable = {} -- Initial empty table for storing input boxes values
 btnclick = false -- Tracks if button is being clicked
+escrst = 0 -- Tracks how many times Esc key has been pressed
+esccounter = 0 -- Timer for Esc key press reset
 enterpress = false -- Tracks if Enter key is being pressed in box F
 entercounter = 0 -- Timer for calc button blue flash when pressing Enter key
 btnhover = false -- Tracks if mouse hovers over button
@@ -46,7 +50,7 @@ calcans = nil -- Final answer
 scr = platform.window -- Shortcut
 scrwh,scrht = scr:width(),scr:height() -- Stores screen dimensions
 
--- Icons for buttons (original icon size is 59x27 px)
+-- Icons for buttons (original icon size is 63x32 px)
 buttonblue = image.new(_R.IMG.buttonblue)
 buttongrey = image.new(_R.IMG.buttongrey)
 buttonred = image.new(_R.IMG.buttonred)
@@ -68,7 +72,7 @@ function on.construction()
     inpf = inpbox(6,"F = ",2,3)
 
     -- Defines Calc button, btnname = button(ID,"label text",x-pos,y-pos,width,height)
-    btncalc = button(1,"Calc",250,174,59,27)
+    btncalc = button(1,"Calc",252,175,56,26)
 
 end
 
@@ -190,6 +194,11 @@ function on.paint(gc)
             gc:drawLine(0,lblhdght+scrht*i/rows-padding,scrwh,lblhdght+scrht*i/rows-padding)
         end
     end
+
+-- Resets Esc key button press after 500 ms
+if esccounter < timer.getMilliSecCounter()  then
+    escrst = 0
+end
 
 end
 
@@ -314,6 +323,21 @@ function inpbox:editor()
                 return true
             end
         end,
+        escapeKey = function() -- Clears all values when Esc is being pressed quickly two times
+            esccounter = timer.getMilliSecCounter()+500
+            escrst = escrst+1
+            if escrst == 2 then
+                for i = 1,6 do
+                    inpidtable[i]:setText("")
+                end
+            inpidtable[1]:setFocus() -- Focus is set in box A
+            escrst = 0 -- Resets counter
+            printans = 0 -- Clears final answer
+            chkx0 = 0 -- Clears error message
+            chkx2 = 0 -- Clears error message
+            checklin = 0 -- Clears error message
+            end
+        end,
         enterKey = function() -- Move curser to next input box
             if self.id >= 1 and self.id <= 5 then
                 inpidtable[self.id+1]:setFocus()
@@ -353,8 +377,8 @@ function inpbox:editor()
             end
         end
     }
-  
-end  
+
+end
 
 -- Class defines button properties and actions
 button = class()
