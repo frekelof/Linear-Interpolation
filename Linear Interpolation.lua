@@ -9,21 +9,19 @@
 --             Added red button for checklin error.
 --             Added borders around input boxes. Blue border on active box and grey border on inactive boxes.
 --             Discovered that Lua does not understand (-) "negative", char(8722) as a number. - "minus" char(45) must be used for negative numbers. Updated function inpexp() to convert (-) to -. Why the hell does not Lua on Nspire support (-) out of box?
-
--- To do --
--- Investigare if device check other than API level can be implemented.
--- Investigate if horizontal split screen can be solved in a better way than "Horizontal split not supported! error". Can a scrollbar be added?
+-- 2019-10-27: Updated "split screen warning" to include min/max screen ratio, not only minimum height. 
+--             Changed mouse hover button color to light grey instead of dark grey
 
 -- Minimum requirements: TI Nspire CX CAS (color resulution 318x212)
+
 -- https://en.wikipedia.org/wiki/Linear_interpolation
 
 -- Potential issues within code --
--- Horizontal split view is not possible.
 -- If rows or clns is set to 0 it will cause division by zero. Only affects typo during app design.
 -- Code does not check for device compability other then trough apilevel requirement. CAS is required for solving equation.
 
 platform.apilevel = '2.4'
-local appversion = "191013" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
+local appversion = "191027" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
 
 -- Grid layout configuration
 local lblhdg = "Linear Interpolation" -- Heading text
@@ -153,11 +151,11 @@ function on.paint(gc)
     -- Prints heading
     gc:setFont("sansserif","b",fnthdg) -- Heading font
     lblhdgwh,lblhdght = gc:getStringWidth(lblhdg),gc:getStringHeight(lblhdg) -- Fetches string dimensions
-    if scrht >= 212 then
-        gc:drawString(lblhdg,scrwh/2-lblhdgwh/2,0,"top") -- Prints heading
+    if scrht/scrwh < 0.65 or scrht/scrwh > 0.69 or scrht < 212 then
+        gc:drawString("Screen ratio not supported!",0,0,"top") -- Prints warning
     else
-        gc:drawString("Horizontal split not supported!",0,0,"top") -- Prints warning
-    end    
+        gc:drawString(lblhdg,scrwh/2-lblhdgwh/2,0,"top") -- Prints heading
+    end
     gc:setPen("thin", "dotted")
     gc:drawLine(0,lblhdght,scrwh,lblhdght) -- Draws line below heading
     
@@ -495,17 +493,17 @@ function button:paint(gc)
     enterpress = false
     end
 
-     -- Makes button blue during mouse click and Enter key press
+    -- Makes button blue during mouse click and Enter key press
     if btnclick == true or enterpress == true then
         buttonblue = buttonblue:copy(self.wh*scrwh/318,self.ht*scrht/212)
-        gc:drawImage(buttonblue, self.x*scrwh/318,self.y*scrht/212)
+        gc:drawImage(buttonblue,self.x*scrwh/318,self.y*scrht/212)
         gc:setFont("sansserif","b",fnthdg)
         gc:setColorRGB(0xFFFFFF)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     else -- Normal mode, white button with black text
         buttonwhite = buttonwhite:copy(self.wh*scrwh/318,self.ht*scrht/212)
         gc:drawImage(buttonwhite,self.x*scrwh/318,self.y*scrht/212)
-        gc:setFont("sansserif","b",fnthdg)
+        gc:setFont("sansserif","r",fnthdg)
         gc:setColorRGB(0x000000)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     end
@@ -513,16 +511,16 @@ function button:paint(gc)
     -- Makes button gray on mouse hover 
     if btnhover == true and btnclick == false and enterpress == false then
         buttongrey = buttongrey:copy(self.wh*scrwh/318,self.ht*scrht/212)
-        gc:drawImage(buttongrey, self.x*scrwh/318,self.y*scrht/212)
+        gc:drawImage(buttongrey,self.x*scrwh/318,self.y*scrht/212)
         gc:setFont("sansserif","b",fnthdg)
-        gc:setColorRGB(0xFFFFFF)
+        gc:setColorRGB(0x000000)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     end
 
     -- Makes button red on errors
     if chkx0 == 1 or chkx2 == 1 or checklin == 1 then
         buttonred = buttonred:copy(self.wh*scrwh/318,self.ht*scrht/212)
-        gc:drawImage(buttonred, self.x*scrwh/318,self.y*scrht/212)
+        gc:drawImage(buttonred,self.x*scrwh/318,self.y*scrht/212)
         gc:setFont("sansserif","b",fnthdg)
         gc:setColorRGB(0xFFFFFF)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
