@@ -4,24 +4,23 @@
 --             Changed button icons due to graphical glitch on hand held unit.
 -- 2019-10-13: Fixed program crash during split screen.
 --             Lowered time ticks to 200 ms. 100 ms caused flickering and glitches on hand held unit.
---             Bug: Do clear by Esc or c. Leave all boxes empty and enter a number in F and press Enter. Calculation will be done and answer returned using "old" values. Fix: Set all values in inpexptable[i] to nil during clear.
+--             Fixed bug: Do clear by Esc or c. Leave all boxes empty and enter a number in F and press Enter. Calculation will be done and answer returned using "old" values. Fix: Set all values in inpexptable[i] to nil during clear.
 --             Changed as many variabels as safely possible to local. (I didn't want to poke the bear to much.)
 --             Added red button for checklin error.
 --             Added borders around input boxes. Blue border on active box and grey border on inactive boxes.
 --             Discovered that Lua does not understand (-) "negative", char(8722) as a number. - "minus" char(45) must be used for negative numbers. Updated function inpexp() to convert (-) to -. Why the hell does not Lua on Nspire support (-) out of box?
 -- 2019-10-27: Updated "split screen warning" to include min/max screen ratio, not only minimum height. 
---             Changed mouse hover button color to light grey instead of dark grey
+--             Changed mouse hover button color to light grey instead of dark grey.
+-- 2019-11-13: Added CAS check and warning if program running on a non CAS calculator.
+--             Improved how active input box is set. Focus remains in active box during resize in comp view. On prgm launch and switch between calc and comp view, focus is set in input box A.
+--             Added copy/cut/paste text functionality
 
--- Minimum requirements: TI Nspire CX CAS (color resulution 318x212)
-
+-- Sources used --
 -- https://en.wikipedia.org/wiki/Linear_interpolation
 
--- Potential issues within code --
--- If rows or clns is set to 0 it will cause division by zero. Only affects typo during app design.
--- Code does not check for device compability other then trough apilevel requirement. CAS is required for solving equation.
-
+-- Minimum requirements: TI Nspire CX CAS (color resulution 318x212)
 platform.apilevel = '2.4'
-local appversion = "191027" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
+local appversion = "191113" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
 
 -- Grid layout configuration
 local lblhdg = "Linear Interpolation" -- Heading text
@@ -42,7 +41,7 @@ local brdcolorinact = 0xEBEBEB -- Inactive box border, grey
 local errorcolor = 0xF02600 -- Error text, Dark Red
 
 -- Variabels for internal use
-local setfocus = 1 -- Sets focus in box A when program launches
+local isCAS = nil -- Used for CAS check. Variabel is set in on.resize() function.
 local fnthdg,fntbody = fnthdgset,fntbodyset -- Working fonts used by program
 local inpidtable = {} -- Initial empty table for storing input boxes unique ID:s
 local inpexptable = {} -- Initial empty table for storing input boxes values
@@ -63,10 +62,10 @@ local scr = platform.window -- Shortcut
 local scrwh,scrht = scr:width(),scr:height() -- Stores screen dimensions
 
 -- Icons for buttons (original icon size is 63x32 px)
-buttonblue = image.new(_R.IMG.buttonblue)
-buttongrey = image.new(_R.IMG.buttongrey)
-buttonred = image.new(_R.IMG.buttonred)
-buttonwhite = image.new(_R.IMG.buttonwhite)
+local buttonblue = image.new(_R.IMG.buttonblue)
+local buttongrey = image.new(_R.IMG.buttongrey)
+local buttonred = image.new(_R.IMG.buttonred)
+local buttonwhite = image.new(_R.IMG.buttonwhite)
 
 function on.construction()
 
@@ -74,6 +73,11 @@ function on.construction()
 
     -- Sets background colour
     scr:setBackgroundColor(bgcolor)
+
+    -- Activates copy/cut/paste functionality
+    toolpalette.enableCopy(true)
+    toolpalette.enableCut(true)
+    toolpalette.enablePaste(true)
 
     -- Defines input boxes variabels, var = inputbox(ID,"label text",row,column)
     inpa = inpbox(1,"A = ",1,1)
@@ -85,9 +89,6 @@ function on.construction()
 
     -- Defines Calc button, btnname = button(ID,"label text",x-pos,y-pos,width,height)
     btncalc = button(1,"Calc",252,175,56,26)
-    
-    -- Sets focus in box A when program launches
-    inpidtable[1]:setFocus()
 
 end
 
@@ -101,21 +102,17 @@ end
 function on.timer() -- Updates screen 5 times per second
 
     scrupdate()
-    
-    -- Sets focus in box A when program launches
-    if setfocus == 1 then    
-        inpidtable[1]:setBorderColor(brdcoloract)
-        inpidtable[1]:setFocus()
-        setfocus = 0 -- Reset focus
-    end
-    
+
 end
 
 function on.resize()
 
     -- Fetches new screen dimensions when window resizes
     scrwh,scrht = scr:width(),scr:height()
-
+    
+    -- Checks if program running on a CAS calculator
+    isCAS = not not math.evalStr("?")
+    
     -- Adjust font size depending on screen size
     if scrwh >= 318 then
         fnthdg = fnthdgset*scrwh/318
@@ -133,11 +130,17 @@ function on.resize()
     inpe:editor()
     inpf:editor()
 
-    -- Makes border remain black in active box
-    for i = 1,6 do
+    -- Makes border remain blue in active box
+    local setfocus = 1 -- Used to set focus in input box A
+    for i = 1,6 do -- Tracks which input box has focus
         if inpidtable[i]:hasFocus() == true then
             inpidtable[i]:setBorderColor(brdcoloract)
+            setfocus = 0
         end
+    end
+    if setfocus == 1 then -- Makes input box A active at launch and if no other input boxes focus
+        inpidtable[1]:setFocus()
+        inpidtable[1]:setBorderColor(brdcoloract)
     end
 
 end
@@ -145,15 +148,20 @@ end
 function on.paint(gc)
 
     -- Prints app version at bottom of page
-    gc:setFont("sansserif","r",9)
+    gc:setFont("sansserif","r",7)
     gc:drawString("Version: "..appversion,0,scrht,"bottom")
 
     -- Prints heading
     gc:setFont("sansserif","b",fnthdg) -- Heading font
     lblhdgwh,lblhdght = gc:getStringWidth(lblhdg),gc:getStringHeight(lblhdg) -- Fetches string dimensions
     if scrht/scrwh < 0.65 or scrht/scrwh > 0.69 or scrht < 212 then
-        gc:drawString("Screen ratio not supported!",0,0,"top") -- Prints warning
+        gc:setColorRGB(errorcolor)
+        gc:drawString("Screen ratio not supported!",0,0,"top") -- Prints warning for strange screen sizes
+    elseif isCAS == false then -- Prints warning if calculator is not CAS
+        gc:setColorRGB(errorcolor)
+        gc:drawString("Calculator not supported!",0,0,"top")
     else
+        gc:setColorRGB(0x000000)
         gc:drawString(lblhdg,scrwh/2-lblhdgwh/2,0,"top") -- Prints heading
     end
     gc:setPen("thin", "dotted")
