@@ -2,53 +2,67 @@
 -- 2019-10-09: First version considered done.
 -- 2019-10-10: Added, clear all values when Esc key is pressed two times. 
 --             Changed button icons due to graphical glitch on hand held unit.
+-- 2019-10-13: Fixed program crash during split screen.
+--             Lowered time ticks to 200 ms. 100 ms caused flickering and glitches on hand held unit.
+--             Bug: Do clear by Esc or c. Leave all boxes empty and enter a number in F and press Enter. Calculation will be done and answer returned using "old" values. Fix: Set all values in inpexptable[i] to nil during clear.
+--             Changed as many variabels as safely possible to local. (I didn't want to poke the bear to much.)
+--             Added red button for checklin error.
+--             Added borders around input boxes. Blue border on active box and grey border on inactive boxes.
+--             Discovered that Lua does not understand (-) "negative", char(8722) as a number. - "minus" char(45) must be used for negative numbers. Updated function inpexp() to convert (-) to -. Why the hell does not Lua on Nspire support (-) out of box?
+
+-- To do --
+-- Investigare if device check other than API level can be implemented.
+-- Investigate if horizontal split screen can be solved in a better way than "Horizontal split not supported! error". Can a scrollbar be added?
 
 -- Minimum requirements: TI Nspire CX CAS (color resulution 318x212)
 -- https://en.wikipedia.org/wiki/Linear_interpolation
 
 -- Potential issues within code --
--- If application is grouped with other pages on hand help unit, font size might cause errors.
+-- Horizontal split view is not possible.
 -- If rows or clns is set to 0 it will cause division by zero. Only affects typo during app design.
 -- Code does not check for device compability other then trough apilevel requirement. CAS is required for solving equation.
 
 platform.apilevel = '2.4'
-appversion = "191010" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
+local appversion = "191013" -- Made by: Fredrik Ekelöf, fredrik.ekelof@gmail.com
 
 -- Grid layout configuration
-lblhdg = "Linear Interpolation" -- Heading text
-clns = 2 -- Total number of columns
-rows = 4 -- Total number of rows
-padding = 10 -- Free space in pixels between each square
-gridassist = 0 -- Turn on/off grid assistent by 0/1
+local lblhdg = "Linear Interpolation" -- Heading text
+local clns = 2 -- Total number of columns
+local rows = 4 -- Total number of rows
+local padding = 10 -- Free space in pixels between each square
+local gridassist = 0 -- Turn on/off grid assistent by 0/1
 
 -- Font size configuration. Availible sizes are 7,9,10,11,12,16,24
 -- Font size is scaled relative to size displayd on hand held unit
-fnthdg = 12 -- Heading font size 
-fntbody = 10 -- Label and body text font size 
+local fnthdgset = 12 -- Heading font size 
+local fntbodyset = 10 -- Label and body text font size 
 
 -- Colors
-bgcolor = 0xCFE2F3 -- Background, Light blue
-errorcolor = 0xF02600 -- Error text, Dark Red
+local bgcolor = 0xCFE2F3 -- Background, Light blue
+local brdcoloract = 0x2478CF -- Active box border, blue
+local brdcolorinact = 0xEBEBEB -- Inactive box border, grey 
+local errorcolor = 0xF02600 -- Error text, Dark Red
 
 -- Variabels for internal use
-setfocus = 1 -- Sets focus in box A when program launches
-inpidtable = {} -- Initial empty table for storing input boxes unique ID:s
-inpexptable = {} -- Initial empty table for storing input boxes values
-btnclick = false -- Tracks if button is being clicked
-escrst = 0 -- Tracks how many times Esc key has been pressed
-esccounter = 0 -- Timer for Esc key press reset
-enterpress = false -- Tracks if Enter key is being pressed in box F
-entercounter = 0 -- Timer for calc button blue flash when pressing Enter key
-btnhover = false -- Tracks if mouse hovers over button
-chkx0 = nil -- Checks if x occurs zero times in equation
-chkx2 = nil -- Checks if x occurs more then once in equation
-checklin = nil -- Checks if equation is linear
-printans = nil -- Checks if final answer shall be printed
-calcans = nil -- Final answer
+local setfocus = 1 -- Sets focus in box A when program launches
+local fnthdg,fntbody = fnthdgset,fntbodyset -- Working fonts used by program
+local inpidtable = {} -- Initial empty table for storing input boxes unique ID:s
+local inpexptable = {} -- Initial empty table for storing input boxes values
+local btnclick = false -- Tracks if button is being clicked
+local btnhover = false -- Tracks if mouse hovers over button
+local escrst = 0 -- Tracks how many times Esc key has been pressed
+local esccounter = 0 -- Timer for Esc key press reset
+local enterpress = false -- Tracks if Enter key is being pressed in box F
+local entercounter = 0 -- Timer for calc button blue flash when pressing Enter key
+local chkx0 = nil -- Checks if x occurs zero times in equation
+local chkx2 = nil -- Checks if x occurs more then once in equation
+local checklin = nil -- Checks if equation is linear
+local printans = nil -- Checks if final answer shall be printed
+local calcans = nil -- Final answer
 
 -- Screen properties
-scr = platform.window -- Shortcut
-scrwh,scrht = scr:width(),scr:height() -- Stores screen dimensions
+local scr = platform.window -- Shortcut
+local scrwh,scrht = scr:width(),scr:height() -- Stores screen dimensions
 
 -- Icons for buttons (original icon size is 63x32 px)
 buttonblue = image.new(_R.IMG.buttonblue)
@@ -58,7 +72,7 @@ buttonwhite = image.new(_R.IMG.buttonwhite)
 
 function on.construction()
 
-    timer.start(1/10) -- Starts timer with 10 ticks per second
+    timer.start(1/5) -- Starts timer with 5 ticks per second
 
     -- Sets background colour
     scr:setBackgroundColor(bgcolor)
@@ -73,6 +87,9 @@ function on.construction()
 
     -- Defines Calc button, btnname = button(ID,"label text",x-pos,y-pos,width,height)
     btncalc = button(1,"Calc",252,175,56,26)
+    
+    -- Sets focus in box A when program launches
+    inpidtable[1]:setFocus()
 
 end
 
@@ -83,16 +100,17 @@ function scrupdate()
     
 end
 
-function on.timer() -- Updates screen 10 times per second
+function on.timer() -- Updates screen 5 times per second
 
     scrupdate()
     
-    if setfocus == 1 then
-        -- Sets focus in box A when program launches
+    -- Sets focus in box A when program launches
+    if setfocus == 1 then    
+        inpidtable[1]:setBorderColor(brdcoloract)
         inpidtable[1]:setFocus()
         setfocus = 0 -- Reset focus
     end
-
+    
 end
 
 function on.resize()
@@ -100,6 +118,15 @@ function on.resize()
     -- Fetches new screen dimensions when window resizes
     scrwh,scrht = scr:width(),scr:height()
 
+    -- Adjust font size depending on screen size
+    if scrwh >= 318 then
+        fnthdg = fnthdgset*scrwh/318
+        fntbody = fntbodyset*scrwh/318
+     else
+        fnthdg = 7
+        fntbody = 7
+     end
+     
     -- Prints input boxes to above defined variabels
     inpa:editor()
     inpb:editor()
@@ -107,6 +134,13 @@ function on.resize()
     inpd:editor()
     inpe:editor()
     inpf:editor()
+
+    -- Makes border remain black in active box
+    for i = 1,6 do
+        if inpidtable[i]:hasFocus() == true then
+            inpidtable[i]:setBorderColor(brdcoloract)
+        end
+    end
 
 end
 
@@ -117,12 +151,16 @@ function on.paint(gc)
     gc:drawString("Version: "..appversion,0,scrht,"bottom")
 
     -- Prints heading
-    gc:setFont("sansserif","b",fnthdg*scrwh/318) -- Heading font
+    gc:setFont("sansserif","b",fnthdg) -- Heading font
     lblhdgwh,lblhdght = gc:getStringWidth(lblhdg),gc:getStringHeight(lblhdg) -- Fetches string dimensions
-    gc:drawString(lblhdg,scrwh/2-lblhdgwh/2,0,"top") -- Prints heading
+    if scrht >= 212 then
+        gc:drawString(lblhdg,scrwh/2-lblhdgwh/2,0,"top") -- Prints heading
+    else
+        gc:drawString("Horizontal split not supported!",0,0,"top") -- Prints warning
+    end    
     gc:setPen("thin", "dotted")
     gc:drawLine(0,lblhdght,scrwh,lblhdght) -- Draws line below heading
-
+    
     -- Prints labels to above defined input boxes
     inpa:lblpaint(gc)
     inpb:lblpaint(gc)
@@ -137,7 +175,7 @@ function on.paint(gc)
     -- Be aware, x and y coordinates are adjusted manually. Use grid assistent to fit content on screen.
     -- Prints error if there is zero x in equation
     if chkx0 == 1 then
-        gc:setFont("sansserif","r",fntbody*scrwh/318)
+        gc:setFont("sansserif","r",fntbody)
         gc:setColorRGB(errorcolor)
         gc:drawString("1 variabel must be x",10*scrwh/318,170*scrht/212,"top")
     end
@@ -145,7 +183,7 @@ function on.paint(gc)
     -- Be aware, x and y coordinates are adjusted manually. Use grid assistent to fit content on screen.
     -- Prints error if there is more then one x in equation
     if chkx2 == 1 then
-        gc:setFont("sansserif","r",fntbody*scrwh/318)
+        gc:setFont("sansserif","r",fntbody)
         gc:setColorRGB(errorcolor)
         gc:drawString("Only 1 variabel can be x",10*scrwh/318,170*scrht/212,"top")
     end
@@ -153,7 +191,7 @@ function on.paint(gc)
     -- Be aware, x and y coordinates are adjusted manually. Use grid assistent to fit content on screen.
     -- Prints error if equation is not linear
     if checklin == 1 and chkx0 == 0 and chkx2 == 0 then
-        gc:setFont("sansserif","r",fntbody*scrwh/318)
+        gc:setFont("sansserif","r",fntbody)
         gc:setColorRGB(errorcolor)
         gc:drawString("Equation is not linear",10*scrwh/318,170*scrht/212,"top")
     end
@@ -161,7 +199,7 @@ function on.paint(gc)
     -- Be aware, x and y coordinates are adjusted manually. Use grid assistent to fit content on screen.
     -- Prints final answer for x
     if printans == 1 then
-        gc:setFont("sansserif","r",fntbody*scrwh/318)
+        gc:setFont("sansserif","r",fntbody)
         gc:setColorRGB(0x000000)
         gc:drawString("x = "..calcans,10*scrwh/318,170*scrht/212,"top")
     end
@@ -195,17 +233,17 @@ function on.paint(gc)
         end
     end
 
--- Resets Esc key button press after 500 ms
-if esccounter < timer.getMilliSecCounter()  then
-    escrst = 0
-end
+    -- Resets Esc key button press after 500 ms
+    if esccounter < timer.getMilliSecCounter()  then
+        escrst = 0
+    end
 
 end
 
 -- Checks heading string size outside of paint function
 function gethdgsize(str,gc)
 
-    gc:setFont("sansserif","b",fnthdg*scrwh/318)
+    gc:setFont("sansserif","b",fnthdg)
     local strwh,strht = gc:getStringWidth(str),gc:getStringHeight(str)
     return strwh,strht
 
@@ -214,7 +252,7 @@ end
 -- Checks label string size outside of paint function
 function getlblsize(str,gc)
 
-    gc:setFont("sansserif","r",fntbody*scrwh/318)
+    gc:setFont("sansserif","r",fntbody)
     local strwh,strht = gc:getStringWidth(str),gc:getStringHeight(str)
     return strwh,strht
 
@@ -239,7 +277,7 @@ function inpbox:lblpaint(gc)
     local scrht = scrht-lblhdght
 
     -- Properties for labels
-    gc:setFont("sansserif","r",fntbody*scrwh/318)
+    gc:setFont("sansserif","r",fntbody)
     gc:drawString(self.lbl,scrwh*self.cln/clns-scrwh/clns+padding,lblhdght+scrht*self.row/rows-scrht/rows+padding,"top")
 
 end
@@ -248,30 +286,41 @@ function inpbox:editor()
 
     -- Verifies if an input value is a valid number. Returns red colored expression if not OK.
     function inpexp()
-
+        
+        local boxexp = self.boxid:getExpression()
+        
         printans = 0 -- Clears final answer
         chkx0 = 0 -- Clears error message
         chkx2 = 0 -- Clears error message
         checklin = 0 -- Clears error message
-        
-        -- Checks if variable is x
-        if self.boxid:getExpression() == "x" then
+
+        -- Converts (-) "negative" char(8722) to - "minus" char(45). Lua does not understand (-) as a number.
+        if boxexp ~= nil then
+            boxexp = boxexp:gsub(string.uchar(8722),"-")
+        end
+
+        -- Converts input expression to a number
+        if boxexp == "x" then -- Checks if variable is x, marks it as OK
             inpexptable[self.id] = "x"
             self.boxid:setTextColor(0x000000)
-            self.boxid:setMainFont("sansserif","r",fntbody*scrwh/318)
-        else -- Converts input expression to a number
-            inpexptable[self.id] = tonumber(self.boxid:getExpression())
-                if inpexptable[self.id] == nil then -- Flags expression in red text if not a number
-                    self.boxid:setTextColor(errorcolor)
-                    self.boxid:setMainFont("sansserif","i",fntbody*scrwh/318)
-                else -- If number is OK, then text is set to normal black.
-                    self.boxid:setTextColor(0x000000)
-                    self.boxid:setMainFont("sansserif","r",fntbody*scrwh/318)
-                end
+            self.boxid:setMainFont("sansserif","r",fntbody)
+        elseif boxexp == "-" then -- Checks if variable is minus sign char(45), marks it as OK
+            inpexptable[self.id] = "-"
+            self.boxid:setTextColor(0x000000)
+            self.boxid:setMainFont("sansserif","r",fntbody)
+         else        
+            inpexptable[self.id] = tonumber(boxexp)
+            if inpexptable[self.id] == nil then -- Flags expression in red text if not a number
+                self.boxid:setTextColor(errorcolor)
+                self.boxid:setMainFont("sansserif","i",fntbody)
+            else -- If number is OK, then text is set to normal black.
+                self.boxid:setTextColor(0x000000)
+                self.boxid:setMainFont("sansserif","r",fntbody)
+            end
         end
 
     end
-
+    
     -- Fetches string sizes of heading and labels
     local lblwh,lblht = platform.withGC(getlblsize,self.lbl)
     local hdgwh,hdght = platform.withGC(gethdgsize,lblhdg)
@@ -279,46 +328,64 @@ function inpbox:editor()
     local scrht = scrht-hdght
 
     -- Properties for input boxes
-    self.boxid:setMainFont("sansserif","r",fntbody*scrwh/318)
+    self.boxid:setMainFont("sansserif","r",fntbody)
     self.boxid:move(lblwh+scrwh*self.cln/clns-scrwh/clns+padding,hdght+scrht*(self.row-1)/rows+padding)
-    self.boxid:resize(scrwh/clns-lblwh-2*padding,25+2*(fntbody*scrwh/318-10))
+    self.boxid:resize(scrwh/clns-lblwh-2*padding,27+2*(fntbody-10)) -- Height formula concluded from different screen size tests
+    self.boxid:setBorder(1)
+    self.boxid:setBorderColor(brdcolorinact) -- Default border color
     self.boxid:setDisable2DinRT(true) -- Disables mathprint
     self.boxid:setColorable(false) -- Disables manual colors
     self.boxid:setWordWrapWidth(-1) -- Disables word wrap
     self.boxid:setTextChangeListener(inpexp) -- Checks function inpexp() during writing
-    self.boxid:registerFilter { -- Keyboard actions
-        tabKey = function() -- Moves curser to next input box
+    self.boxid:registerFilter { -- Keyboard/mouse actions
+        tabKey = function()  -- Moves curser to next input box
             if self.id >= 1 and self.id <= 5 then
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[self.id+1]:setBorderColor(brdcoloract)
                 inpidtable[self.id+1]:setFocus()
                 return true
             else
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[1]:setBorderColor(brdcoloract)
                 inpidtable[1]:setFocus()
                 return true
             end
         end,
         backtabKey = function() -- Moves curser to previous input box
             if self.id >= 2 and self.id <= 6 then
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[self.id-1]:setBorderColor(brdcoloract)
                 inpidtable[self.id-1]:setFocus()
                 return true
             else
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[6]:setBorderColor(brdcoloract)
                 inpidtable[6]:setFocus()
                 return true
             end
         end,
         arrowDown = function() -- Moves curser to next input box
             if self.id >= 1 and self.id <= 5 then
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[self.id+1]:setBorderColor(brdcoloract)
                 inpidtable[self.id+1]:setFocus()
                 return true
             else
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[1]:setBorderColor(brdcoloract)
                 inpidtable[1]:setFocus()
                 return true
             end
         end,
         arrowUp = function() -- Moves curser to previous input box
             if self.id >= 2 and self.id <= 6 then
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[self.id-1]:setBorderColor(brdcoloract)
                 inpidtable[self.id-1]:setFocus()
                 return true
             else
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[6]:setBorderColor(brdcoloract)
                 inpidtable[6]:setFocus()
                 return true
             end
@@ -329,7 +396,10 @@ function inpbox:editor()
             if escrst == 2 then
                 for i = 1,6 do
                     inpidtable[i]:setText("")
+                    inpexptable[i] = nil
                 end
+            self.boxid:setBorderColor(brdcolorinact)
+            inpidtable[1]:setBorderColor(brdcoloract)
             inpidtable[1]:setFocus() -- Focus is set in box A
             escrst = 0 -- Resets counter
             printans = 0 -- Clears final answer
@@ -338,45 +408,64 @@ function inpbox:editor()
             checklin = 0 -- Clears error message
             end
         end,
-        enterKey = function() -- Move curser to next input box
+        enterKey = function() -- Move curser to next input box or perform calculations
             if self.id >= 1 and self.id <= 5 then
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[self.id+1]:setBorderColor(brdcoloract)
                 inpidtable[self.id+1]:setFocus()
                 return true
             else
-                entercounter = timer.getMilliSecCounter()+100 -- Triggers calc button blue flash
+                entercounter = timer.getMilliSecCounter()+200 -- Triggers calc button blue flash
                 -- Clears all values when c is entered in box F and Enter key is pressed
                 if self.boxid:getExpression() == "c" then
                     for i = 1,6 do
                         inpidtable[i]:setText("")
+                        inpexptable[i] = nil
                     end
+                    self.boxid:setBorderColor(brdcolorinact)
+                    inpidtable[1]:setBorderColor(brdcoloract)
                     inpidtable[1]:setFocus() -- Focus is set in box A
                 else
                     calculate()
-                    inpidtable[6]:setFocus() -- Curser remains in box F
+                    inpidtable[6]:setFocus() -- Garanties curser remains in box F
                     return true
                 end
             end
         end,
-        returnKey = function()  -- Move curser to next input box
+        returnKey = function()  -- Move curser to next input box or perform calculations
             if self.id >= 1 and self.id <= 5 then
+                self.boxid:setBorderColor(brdcolorinact)
+                inpidtable[self.id+1]:setBorderColor(brdcoloract)
                 inpidtable[self.id+1]:setFocus()
                 return true
             else
-                entercounter = timer.getMilliSecCounter()+100 -- Triggers calc button blue flash
+                entercounter = timer.getMilliSecCounter()+200 -- Triggers calc button blue flash
                 -- Clears all values when c is entered in box F and Enter key is pressed
                 if self.boxid:getExpression() == "c" then
                     for i = 1,6 do
                         inpidtable[i]:setText("")
+                        inpexptable[i] = nil
                     end
+                    self.boxid:setBorderColor(brdcolorinact)
+                    inpidtable[1]:setBorderColor(brdcoloract)
                     inpidtable[1]:setFocus() -- Focus is set in box A
                 else
                     calculate()
-                    inpidtable[6]:setFocus() -- Curser remains in box F
+                    inpidtable[6]:setFocus() -- Garanties curser remains in box F
                     return true
                 end
             end
+        end,
+        mouseDown = function() -- Moves curser to clicked input box
+            if inpidtable[self.id]:hasFocus() == false then
+                for i = 1,6 do
+                    inpidtable[i]:setBorderColor(brdcolorinact)
+                end
+                inpidtable[self.id]:setBorderColor(brdcoloract)
+            end
+            return false -- Must be false, otherwise not possible to select text with mouse
         end
-    }
+    } -- End of keyboard/mouse actions
 
 end
 
@@ -399,7 +488,7 @@ function button:paint(gc)
 
     local btnlblwh,btnlblht = platform.withGC(gethdgsize,self.lbl)
 
-    -- Calc button will flash for 100 ms
+    -- Calc button will flash for 200 ms
     if timer.getMilliSecCounter() < entercounter then
     enterpress = true
     else
@@ -410,13 +499,13 @@ function button:paint(gc)
     if btnclick == true or enterpress == true then
         buttonblue = buttonblue:copy(self.wh*scrwh/318,self.ht*scrht/212)
         gc:drawImage(buttonblue, self.x*scrwh/318,self.y*scrht/212)
-        gc:setFont("sansserif","b",fnthdg*scrwh/318)
+        gc:setFont("sansserif","b",fnthdg)
         gc:setColorRGB(0xFFFFFF)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     else -- Normal mode, white button with black text
         buttonwhite = buttonwhite:copy(self.wh*scrwh/318,self.ht*scrht/212)
         gc:drawImage(buttonwhite,self.x*scrwh/318,self.y*scrht/212)
-        gc:setFont("sansserif","b",fnthdg*scrwh/318)
+        gc:setFont("sansserif","b",fnthdg)
         gc:setColorRGB(0x000000)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     end
@@ -425,16 +514,16 @@ function button:paint(gc)
     if btnhover == true and btnclick == false and enterpress == false then
         buttongrey = buttongrey:copy(self.wh*scrwh/318,self.ht*scrht/212)
         gc:drawImage(buttongrey, self.x*scrwh/318,self.y*scrht/212)
-        gc:setFont("sansserif","b",fnthdg*scrwh/318)
+        gc:setFont("sansserif","b",fnthdg)
         gc:setColorRGB(0xFFFFFF)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     end
-    
+
     -- Makes button red on errors
-    if chkx0 == 1 or chkx2 == 1 then
+    if chkx0 == 1 or chkx2 == 1 or checklin == 1 then
         buttonred = buttonred:copy(self.wh*scrwh/318,self.ht*scrht/212)
         gc:drawImage(buttonred, self.x*scrwh/318,self.y*scrht/212)
-        gc:setFont("sansserif","b",fnthdg*scrwh/318)
+        gc:setFont("sansserif","b",fnthdg)
         gc:setColorRGB(0xFFFFFF)
         gc:drawString(self.lbl,self.x*scrwh/318+self.wh*scrwh/318/2-btnlblwh/2,self.y*scrht/212+self.ht*scrht/212/2-btnlblht/2,"top")
     end
@@ -485,12 +574,12 @@ function calculate()
     local checknum = 0 -- To check how many variabels contains numbers in equation
 
     -- Variabels used in equation
-    calca = inpexptable[1]
-    calcb = inpexptable[2]
-    calcc = inpexptable[3]
-    calcd = inpexptable[4]
-    calce = inpexptable[5]
-    calcf = inpexptable[6]
+    local calca = inpexptable[1]
+    local calcb = inpexptable[2]
+    local calcc = inpexptable[3]
+    local calcd = inpexptable[4]
+    local calce = inpexptable[5]
+    local calcf = inpexptable[6]
 
     -- Checks how many x exist in equation
     for i = 1,6 do
@@ -519,7 +608,7 @@ function calculate()
     else
         chkx2 = 0 -- No warning
     end
-    
+
     -- Validates if equation is linear
     if chkx0 == 0 and chkx2 == 0 and checknum == 5 then
         local chklinstr1 = "when("..calca.."<"..calcb..">"..calcc..",1,0,0)"
@@ -533,7 +622,7 @@ function calculate()
         local chklinstr9 = "when("..calce.."-"..calcf.."=0,1,0,0)"
         local chklinstr10 = "when("..calcd.."-"..calcf.."=0,1,0,0)"
         local chklinans =  math.eval(chklinstr1)+math.eval(chklinstr2)+math.eval(chklinstr3)+math.eval(chklinstr4)+math.eval(chklinstr5)+math.eval(chklinstr6)+math.eval(chklinstr7)+math.eval(chklinstr8)+math.eval(chklinstr9)+math.eval(chklinstr10)
-        
+
         -- Sends print command to show warning message "Equation is not linear"
         if chklinans ~= 0 then
             checklin = 1 -- Warning
