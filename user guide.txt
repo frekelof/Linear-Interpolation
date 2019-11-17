@@ -1,4 +1,6 @@
-Enter variabels A - F. Enter x in the variabel that shall be calculated. Example:
+Enter variabels A - F. Enter x in the variabel that shall be calculated.
+
+Examples:
 
 A = 1    D = 2    ¦    A = 1    D = 2
 B = 2    E = x    ¦    B = 2    E = 4
